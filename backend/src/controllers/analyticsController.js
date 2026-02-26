@@ -1,4 +1,5 @@
 const db = require('../config/db');
+const sentimentService = require('../services/sentimentService');
 
 const getAnalyticsOverview = async (req, res) => {
     const { platform } = req.query;
@@ -61,4 +62,76 @@ const syncAnalytics = async (req, res) => {
     }
 };
 
-module.exports = { getAnalyticsOverview, syncAnalytics };
+const analyzeSentiment = async (req, res) => {
+    const { target_id, target_type, content } = req.body;
+
+    if (!target_id || !target_type || !content) {
+        return res.status(400).json({ message: 'Missing required fields: target_id, target_type, content' });
+    }
+
+    try {
+        // 1. Check if we already have it in the db to avoid hitting HF repeatedly
+        const existingResult = await db.query(
+            'SELECT * FROM intelligence_results WHERE target_id = $1 AND target_type = $2',
+            [target_id, target_type.toUpperCase()]
+        );
+
+        if (existingResult.rows.length > 0) {
+            const row = existingResult.rows[0];
+            return res.json({
+                emotion: row.subclass_label,
+                sentiment: row.sentiment_label,
+                confidence: row.sentiment_score,
+                breakdown: row.raw_results
+            });
+        }
+
+        // 2. Call Hugging Face Service
+        const analysis = await sentimentService.analyzeText(content);
+
+        // 3. Save to DB
+        await db.query(
+            `INSERT INTO intelligence_results (target_id, target_type, sentiment_label, sentiment_score, subclass_label, subclass_score, raw_results)
+             VALUES ($1, $2, $3, $4, $5, $6, $7)
+             ON CONFLICT (target_id, target_type) 
+             DO UPDATE SET 
+                sentiment_label = EXCLUDED.sentiment_label,
+                sentiment_score = EXCLUDED.sentiment_score,
+                subclass_label = EXCLUDED.subclass_label,
+                subclass_score = EXCLUDED.subclass_score,
+                raw_results = EXCLUDED.raw_results`,
+            [
+                target_id,
+                target_type.toUpperCase(),
+                analysis.sentiment,
+                analysis.confidence,
+                analysis.emotion,
+                analysis.confidence,
+                JSON.stringify(analysis.breakdown)
+            ]
+        );
+
+        res.json(analysis);
+
+    } catch (error) {
+        console.error('Sentiment Analysis Controller Error:', error);
+        res.status(500).json({ message: 'Error analyzing sentiment', details: error.message });
+    }
+};
+const analyzeSentimentRaw = async (req, res) => {
+    const { text } = req.body;
+
+    if (!text) {
+        return res.status(400).json({ message: 'Missing required field: text' });
+    }
+
+    try {
+        const rawResponse = await sentimentService.analyzeTextRaw(text);
+        res.json({ rawResponse });
+    } catch (error) {
+        console.error('Raw Sentiment Analysis Controller Error:', error);
+        res.status(500).json({ message: 'Error analyzing sentiment raw', details: error.message });
+    }
+};
+
+module.exports = { getAnalyticsOverview, syncAnalytics, analyzeSentiment, analyzeSentimentRaw };

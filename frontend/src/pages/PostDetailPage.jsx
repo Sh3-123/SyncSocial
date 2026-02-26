@@ -12,6 +12,8 @@ import {
     ExternalLink
 } from 'lucide-react';
 import { fetchWithAuth } from '../utils/api';
+import SentimentCard from '../components/SentimentCard';
+import PublicRepliesSentiment from '../components/PublicRepliesSentiment';
 
 function PostDetailPage() {
     const { id } = useParams();
@@ -21,6 +23,42 @@ function PostDetailPage() {
     const [loading, setLoading] = useState(true);
     const [syncingReplies, setSyncingReplies] = useState(false);
 
+    // Sentiment state
+    const [postSentiment, setPostSentiment] = useState(null);
+    const [postSentimentLoading, setPostSentimentLoading] = useState(true);
+
+    // Replies sentiment state
+    const [repliesSentiment, setRepliesSentiment] = useState({});
+    const [repliesSentimentLoading, setRepliesSentimentLoading] = useState(false);
+
+    const fetchSentimentsForReplies = async (repliesList) => {
+        if (!repliesList.length) return;
+        setRepliesSentimentLoading(true);
+        const results = {};
+
+        // Execute fetches concurrently
+        await Promise.all(repliesList.map(async (reply) => {
+            try {
+                const res = await fetchWithAuth('/analytics/emotion', {
+                    method: 'POST',
+                    body: JSON.stringify({
+                        target_id: reply.id.toString(),
+                        target_type: 'COMMENT',
+                        content: reply.content
+                    })
+                });
+                if (res.ok) {
+                    results[reply.id] = await res.json();
+                }
+            } catch (err) {
+                console.error(`Failed to fetch sentiment for reply ${reply.id}`, err);
+            }
+        }));
+
+        setRepliesSentiment(prev => ({ ...prev, ...results }));
+        setRepliesSentimentLoading(false);
+    };
+
     useEffect(() => {
         const fetchPostAndReplies = async () => {
             try {
@@ -29,11 +67,32 @@ function PostDetailPage() {
                     const data = await res.json();
                     setPost(data);
 
+                    // Fetch sentiment for the main post
+                    fetchWithAuth('/analytics/emotion', {
+                        method: 'POST',
+                        body: JSON.stringify({
+                            target_id: data.id.toString(),
+                            target_type: 'POST',
+                            content: data.content
+                        })
+                    })
+                        .then(res => res.ok ? res.json() : null)
+                        .then(sentiment => {
+                            setPostSentiment(sentiment);
+                            setPostSentimentLoading(false);
+                        })
+                        .catch(err => {
+                            console.error('Failed to fetch post sentiment:', err);
+                            setPostSentimentLoading(false);
+                        });
+
                     if (data.platform === 'threads') {
                         // Attempt to fetch existing replies
                         const repliesRes = await fetchWithAuth(`/posts/${id}/public-replies`);
                         if (repliesRes.ok) {
-                            setReplies(await repliesRes.json());
+                            const fetchedReplies = await repliesRes.json();
+                            setReplies(fetchedReplies);
+                            fetchSentimentsForReplies(fetchedReplies);
                         }
                     }
                 } else {
@@ -56,7 +115,9 @@ function PostDetailPage() {
             await fetchWithAuth(`/posts/${id}/sync-public-replies`, { method: 'POST' });
             const repliesRes = await fetchWithAuth(`/posts/${id}/public-replies`);
             if (repliesRes.ok) {
-                setReplies(await repliesRes.json());
+                const fetchedReplies = await repliesRes.json();
+                setReplies(fetchedReplies);
+                fetchSentimentsForReplies(fetchedReplies);
             }
         } catch (err) {
             console.error('Failed to sync public replies:', err);
@@ -145,6 +206,15 @@ function PostDetailPage() {
                 </div>
             </div>
 
+            {/* Post Sentiment */}
+            <div className="mt-8">
+                <SentimentCard
+                    title="Post Analysis"
+                    sentimentData={postSentiment}
+                    loading={postSentimentLoading}
+                />
+            </div>
+
             {/* Public Replies Section */}
             {post.platform === 'threads' && (
                 <div className="mt-8 bg-[#121212] border border-white/10 rounded-3xl p-8">
@@ -161,6 +231,11 @@ function PostDetailPage() {
                         </button>
                     </div>
 
+                    <PublicRepliesSentiment
+                        repliesSentimentData={Object.values(repliesSentiment)}
+                        loading={repliesSentimentLoading}
+                    />
+
                     <div className="space-y-4">
                         {replies.length === 0 ? (
                             <div className="text-center py-8 text-slate-500">
@@ -176,9 +251,19 @@ function PostDetailPage() {
                                             </div>
                                             <span className="text-white font-bold">@{reply.platform_username || 'user'}</span>
                                         </div>
-                                        <span className="text-[10px] text-slate-500 font-medium">
-                                            {new Date(reply.published_at).toLocaleString()}
-                                        </span>
+                                        <div className="flex flex-col items-end">
+                                            <span className="text-[10px] text-slate-500 font-medium mb-1">
+                                                {new Date(reply.published_at).toLocaleString()}
+                                            </span>
+                                            {repliesSentiment[reply.id] && (
+                                                <span className={`text-[10px] px-2 py-0.5 rounded-full font-bold uppercase tracking-wider ${repliesSentiment[reply.id].sentiment === 'positive' ? 'bg-emerald-500/10 text-emerald-400' :
+                                                        repliesSentiment[reply.id].sentiment === 'negative' ? 'bg-rose-500/10 text-rose-400' :
+                                                            'bg-slate-500/10 text-slate-400'
+                                                    }`}>
+                                                    {repliesSentiment[reply.id].emotion}
+                                                </span>
+                                            )}
+                                        </div>
                                     </div>
                                     <div className="text-slate-300 ml-10">
                                         {reply.content}
