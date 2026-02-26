@@ -17,15 +17,25 @@ function PostDetailPage() {
     const { id } = useParams();
     const navigate = useNavigate();
     const [post, setPost] = useState(null);
+    const [replies, setReplies] = useState([]);
     const [loading, setLoading] = useState(true);
+    const [syncingReplies, setSyncingReplies] = useState(false);
 
     useEffect(() => {
-        const fetchPost = async () => {
+        const fetchPostAndReplies = async () => {
             try {
                 const res = await fetchWithAuth(`/posts/${id}`);
                 if (res.ok) {
                     const data = await res.json();
                     setPost(data);
+
+                    if (data.platform === 'threads') {
+                        // Attempt to fetch existing replies
+                        const repliesRes = await fetchWithAuth(`/posts/${id}/public-replies`);
+                        if (repliesRes.ok) {
+                            setReplies(await repliesRes.json());
+                        }
+                    }
                 } else {
                     navigate('/dashboard');
                 }
@@ -37,8 +47,23 @@ function PostDetailPage() {
             }
         };
 
-        fetchPost();
+        fetchPostAndReplies();
     }, [id, navigate]);
+
+    const handleSyncReplies = async () => {
+        setSyncingReplies(true);
+        try {
+            await fetchWithAuth(`/posts/${id}/sync-public-replies`, { method: 'POST' });
+            const repliesRes = await fetchWithAuth(`/posts/${id}/public-replies`);
+            if (repliesRes.ok) {
+                setReplies(await repliesRes.json());
+            }
+        } catch (err) {
+            console.error('Failed to sync public replies:', err);
+        } finally {
+            setSyncingReplies(false);
+        }
+    };
 
     if (loading) {
         return (
@@ -119,6 +144,51 @@ function PostDetailPage() {
                     </div>
                 </div>
             </div>
+
+            {/* Public Replies Section */}
+            {post.platform === 'threads' && (
+                <div className="mt-8 bg-[#121212] border border-white/10 rounded-3xl p-8">
+                    <div className="flex justify-between items-center mb-6">
+                        <h3 className="text-xl font-bold text-white flex items-center gap-2">
+                            <MessageCircle className="text-blue-400" /> Public Replies
+                        </h3>
+                        <button
+                            onClick={handleSyncReplies}
+                            disabled={syncingReplies}
+                            className="px-4 py-2 text-sm bg-white/5 text-white border border-white/10 rounded-lg hover:bg-white/10 transition-colors disabled:opacity-50"
+                        >
+                            {syncingReplies ? 'Syncing...' : 'Sync Replies'}
+                        </button>
+                    </div>
+
+                    <div className="space-y-4">
+                        {replies.length === 0 ? (
+                            <div className="text-center py-8 text-slate-500">
+                                No public replies found. Click sync to fetch.
+                            </div>
+                        ) : (
+                            replies.map((reply) => (
+                                <div key={reply.id} className="p-5 rounded-2xl border border-white/5 bg-white/[0.02]">
+                                    <div className="flex justify-between items-start mb-2">
+                                        <div className="flex items-center gap-2">
+                                            <div className="w-8 h-8 rounded-full bg-blue-500/20 flex items-center justify-center text-blue-400 font-bold">
+                                                {reply.platform_username?.[0]?.toUpperCase() || 'U'}
+                                            </div>
+                                            <span className="text-white font-bold">@{reply.platform_username || 'user'}</span>
+                                        </div>
+                                        <span className="text-[10px] text-slate-500 font-medium">
+                                            {new Date(reply.published_at).toLocaleString()}
+                                        </span>
+                                    </div>
+                                    <div className="text-slate-300 ml-10">
+                                        {reply.content}
+                                    </div>
+                                </div>
+                            ))
+                        )}
+                    </div>
+                </div>
+            )}
 
             <div className="mt-8 flex justify-center">
                 <button

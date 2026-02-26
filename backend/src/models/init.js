@@ -36,11 +36,8 @@ const createTables = async () => {
       user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
       platform VARCHAR(50) NOT NULL,
       platform_post_id VARCHAR(255) NOT NULL,
-<<<<<<< Updated upstream
-=======
       parent_post_id VARCHAR(255), -- ID of the parent thread if this is a reply
       platform_username VARCHAR(255), -- Handle of the author
->>>>>>> Stashed changes
       content TEXT,
       media_url TEXT,
       likes_count INTEGER DEFAULT 0,
@@ -89,11 +86,8 @@ const createTables = async () => {
   try {
     await db.query('ALTER TABLE posts ADD COLUMN IF NOT EXISTS post_type VARCHAR(20) DEFAULT \'POST\'');
     await db.query('ALTER TABLE posts ADD COLUMN IF NOT EXISTS updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP');
-<<<<<<< Updated upstream
-=======
     await db.query('ALTER TABLE posts ADD COLUMN IF NOT EXISTS parent_post_id VARCHAR(255)');
     await db.query('ALTER TABLE posts ADD COLUMN IF NOT EXISTS platform_username VARCHAR(255)');
->>>>>>> Stashed changes
   } catch (err) {
     console.log('Migration subtle error (likely columns already exist):', err.message);
   }
