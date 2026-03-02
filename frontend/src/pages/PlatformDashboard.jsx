@@ -16,6 +16,7 @@ import {
     RefreshCw
 } from 'lucide-react';
 import { fetchWithAuth } from '../utils/api';
+import ProgressBar from '../components/ProgressBar';
 
 function PlatformDashboard() {
     const { platformId } = useParams();
@@ -125,16 +126,16 @@ function PlatformDashboard() {
     const Icon = config.icon;
 
     if (loading) {
-        return (
-            <div className="flex items-center justify-center min-h-[60vh]">
-                <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-blue-500"></div>
-            </div>
-        );
+        return <ProgressBar />;
     }
 
-    const growth = analytics?.current && analytics?.previous
-        ? analytics.current.follower_count - analytics.previous.follower_count
-        : 0;
+    const currentFollowers = analytics?.current?.follower_count;
+    const previousFollowers = analytics?.previous?.follower_count;
+
+    // Calculate growth only if both values exist and are not null
+    const growth = (currentFollowers != null && previousFollowers != null)
+        ? currentFollowers - previousFollowers
+        : null;
 
     return (
         <div className="max-w-7xl mx-auto py-8 px-4">
@@ -172,8 +173,8 @@ function PlatformDashboard() {
                 {[
                     {
                         label: platformId === 'youtube' ? 'Subscribers' : 'Followers',
-                        value: (analytics?.current?.follower_count ?? 0).toLocaleString(),
-                        trend: growth >= 0 ? `+${growth}` : growth,
+                        value: currentFollowers != null ? currentFollowers.toLocaleString() : '-',
+                        trend: growth != null ? (growth >= 0 ? `+${growth}` : growth) : '-',
                         icon: Users
                     },
                     {

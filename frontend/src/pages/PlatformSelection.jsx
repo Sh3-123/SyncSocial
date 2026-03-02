@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Youtube, AtSign, Plus, CheckCircle2, ChevronRight, XCircle, RefreshCw, Search } from 'lucide-react';
 import { fetchWithAuth } from '../utils/api';
-
+import ProgressBar from '../components/ProgressBar';
 function PlatformSelection() {
     const [connectedAccounts, setConnectedAccounts] = useState([]);
     const [loading, setLoading] = useState(true);
@@ -160,11 +160,7 @@ function PlatformSelection() {
     ];
 
     if (loading) {
-        return (
-            <div className="flex items-center justify-center min-h-[60vh]">
-                <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-blue-500"></div>
-            </div>
-        );
+        return <ProgressBar />;
     }
 
     return (

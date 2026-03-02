@@ -63,9 +63,39 @@ const syncAnalytics = async (req, res) => {
             const channelId = accountResult.rows[0].platform_user_id;
             const channelDetails = await youtubeService.getChannelDetails(channelId);
             followerCount = parseInt(channelDetails.subscriberCount, 10) || 0;
+
+        } else if (platform.toLowerCase() === 'threads') {
+            const { decrypt } = require('../utils/crypto');
+            const axios = require('axios');
+
+            const accountResult = await db.query(
+                'SELECT access_token, platform_user_id FROM connected_accounts WHERE user_id = $1 AND platform = $2',
+                [userId, 'threads']
+            );
+
+            if (accountResult.rows.length === 0) {
+                return res.status(404).json({ message: 'No connected Threads account found' });
+            }
+
+            const { access_token: encryptedToken, platform_user_id: threadsUserId } = accountResult.rows[0];
+            const accessToken = decrypt(encryptedToken);
+
+            try {
+                const response = await axios.get(`https://graph.threads.net/v1.0/${threadsUserId}`, {
+                    params: {
+                        fields: 'follower_count',
+                        access_token: accessToken
+                    }
+                });
+                followerCount = parseInt(response.data.follower_count, 10) || 0;
+            } catch (err) {
+                console.error('Failed to fetch Threads profile data:', err.response?.data || err.message);
+                followerCount = null;
+            }
+            if (followerCount === 0) followerCount = null;
         } else {
-            // Mock analytics sync for other platforms like Threads
-            followerCount = Math.floor(Math.random() * 5000) + 10000;
+            // Fallback for unknown platforms
+            followerCount = null;
         }
 
         await db.query(

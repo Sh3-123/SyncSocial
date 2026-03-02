@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Smile, Frown, Meh, Loader2, Sparkles } from 'lucide-react';
+import ProgressBar from './ProgressBar';
 
 const SentimentCard = ({ sentimentData, loading, error, title = "Post Sentiment" }) => {
 
@@ -7,8 +8,8 @@ const SentimentCard = ({ sentimentData, loading, error, title = "Post Sentiment"
         return (
             <div className="bg-[#121212] border border-white/10 rounded-2xl p-6 relative overflow-hidden flex flex-col items-center justify-center min-h-[160px]">
                 <div className="absolute inset-0 bg-gradient-to-br from-indigo-500/5 to-purple-500/5" />
-                <Loader2 className="animate-spin text-indigo-400 mb-2" size={24} />
-                <p className="text-slate-400 text-sm animate-pulse">Analyzing with AI...</p>
+                <ProgressBar className="min-h-0" />
+                <p className="text-slate-400 text-sm animate-pulse mt-4">Analyzing with AI...</p>
             </div>
         );
     }

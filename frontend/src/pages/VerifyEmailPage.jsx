@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { fetchWithAuth } from '../utils/api';
 import { CheckCircle2, XCircle, Loader2 } from 'lucide-react';
+import ProgressBar from '../components/ProgressBar';
 
 function VerifyEmailPage() {
     const { token } = useParams();
@@ -36,7 +37,7 @@ function VerifyEmailPage() {
             <div className="sm:mx-auto sm:w-full sm:max-w-md bg-[#121212] py-10 px-6 shadow-xl sm:rounded-2xl border border-white/10 text-center">
                 {status === 'verifying' && (
                     <div className="flex flex-col items-center">
-                        <Loader2 className="h-16 w-16 text-blue-500 animate-spin mb-4" />
+                        <ProgressBar className="min-h-0 py-4" />
                         <h2 className="text-2xl font-bold text-white mb-2">Verifying your email</h2>
                         <p className="text-slate-400">Please wait while we confirm your email address...</p>
                     </div>

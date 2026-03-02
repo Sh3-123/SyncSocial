@@ -36,6 +36,13 @@ function SignupPage() {
                 body: JSON.stringify({ name, email, password }),
             });
 
+            const contentType = res.headers.get('content-type') || '';
+            const isJson = contentType.includes('application/json');
+
+            if (!isJson) {
+                throw new Error('Server is unavailable. Please make sure the backend is running.');
+            }
+
             const data = await res.json();
 
             if (!res.ok) {

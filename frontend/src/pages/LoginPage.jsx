@@ -24,7 +24,12 @@ function LoginPage() {
             });
             const contentType = res.headers.get('content-type') || '';
             const isJson = contentType.includes('application/json');
-            const data = isJson ? await res.json() : { message: await res.text() };
+
+            if (!isJson) {
+                throw new Error('Server is unavailable. Please make sure the backend is running.');
+            }
+
+            const data = await res.json();
 
             if (!res.ok) {
                 const errorMessage = data.error ? `${data.message}: ${data.error}` : (data.message || 'Login failed');

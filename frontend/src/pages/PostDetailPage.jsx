@@ -14,6 +14,7 @@ import {
 import { fetchWithAuth } from '../utils/api';
 import SentimentCard from '../components/SentimentCard';
 import PublicRepliesSentiment from '../components/PublicRepliesSentiment';
+import ProgressBar from '../components/ProgressBar';
 
 function PostDetailPage() {
     const { id } = useParams();
@@ -87,12 +88,32 @@ function PostDetailPage() {
                         });
 
                     if (data.platform === 'threads' || data.platform === 'youtube') {
-                        // Attempt to fetch existing replies (works for both threads and youtube posts now)
-                        const repliesRes = await fetchWithAuth(`/posts/${id}/public-replies`);
-                        if (repliesRes.ok) {
-                            const fetchedReplies = await repliesRes.json();
-                            setReplies(fetchedReplies);
-                            fetchSentimentsForReplies(fetchedReplies);
+                        // First, fetch existing replies from DB for immediate display
+                        try {
+                            const initialRepliesRes = await fetchWithAuth(`/posts/${id}/public-replies`);
+                            if (initialRepliesRes.ok) {
+                                const fetchedReplies = await initialRepliesRes.json();
+                                setReplies(fetchedReplies);
+                                fetchSentimentsForReplies(fetchedReplies);
+                            }
+                        } catch (err) {
+                            console.error('Failed to fetch initial replies:', err);
+                        }
+
+                        // Then automatically sync replies in the background
+                        setSyncingReplies(true);
+                        try {
+                            await fetchWithAuth(`/posts/${id}/sync-public-replies`, { method: 'POST' });
+                            const repliesRes = await fetchWithAuth(`/posts/${id}/public-replies`);
+                            if (repliesRes.ok) {
+                                const fetchedReplies = await repliesRes.json();
+                                setReplies(fetchedReplies);
+                                fetchSentimentsForReplies(fetchedReplies);
+                            }
+                        } catch (err) {
+                            console.error('Failed to sync public replies:', err);
+                        } finally {
+                            setSyncingReplies(false);
                         }
                     }
                 } else {
@@ -109,29 +130,8 @@ function PostDetailPage() {
         fetchPostAndReplies();
     }, [id, navigate]);
 
-    const handleSyncReplies = async () => {
-        setSyncingReplies(true);
-        try {
-            await fetchWithAuth(`/posts/${id}/sync-public-replies`, { method: 'POST' });
-            const repliesRes = await fetchWithAuth(`/posts/${id}/public-replies`);
-            if (repliesRes.ok) {
-                const fetchedReplies = await repliesRes.json();
-                setReplies(fetchedReplies);
-                fetchSentimentsForReplies(fetchedReplies);
-            }
-        } catch (err) {
-            console.error('Failed to sync public replies:', err);
-        } finally {
-            setSyncingReplies(false);
-        }
-    };
-
     if (loading) {
-        return (
-            <div className="flex items-center justify-center min-h-[60vh]">
-                <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-blue-500"></div>
-            </div>
-        );
+        return <ProgressBar />;
     }
 
     if (!post) return null;
@@ -232,14 +232,8 @@ function PostDetailPage() {
                 <div className="flex justify-between items-center mb-6">
                     <h3 className="text-xl font-bold text-white flex items-center gap-2">
                         <MessageCircle className="text-blue-400" /> {isYouTube ? "Video Comments" : "Public Replies"}
+                        {syncingReplies && <span className="text-sm font-normal text-slate-400 ml-2">(Syncing...)</span>}
                     </h3>
-                    <button
-                        onClick={handleSyncReplies}
-                        disabled={syncingReplies}
-                        className="px-4 py-2 text-sm bg-white/5 text-white border border-white/10 rounded-lg hover:bg-white/10 transition-colors disabled:opacity-50"
-                    >
-                        {syncingReplies ? 'Syncing...' : 'Sync Replies'}
-                    </button>
                 </div>
 
                 <PublicRepliesSentiment
@@ -250,7 +244,7 @@ function PostDetailPage() {
                 <div className="space-y-4">
                     {replies.length === 0 ? (
                         <div className="text-center py-8 text-slate-500">
-                            No {isYouTube ? 'comments' : 'public replies'} found. Click sync to fetch.
+                            {syncingReplies ? `Syncing ${isYouTube ? 'comments' : 'public replies'}...` : `No ${isYouTube ? 'comments' : 'public replies'} found.`}
                         </div>
                     ) : (
                         replies.map((reply) => (
