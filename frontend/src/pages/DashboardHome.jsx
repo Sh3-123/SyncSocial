@@ -1,20 +1,86 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
-import { Users, Eye, TrendingUp, HandHeart } from 'lucide-react';
+import { Users, Eye, TrendingUp, HandHeart, Activity, Heart } from 'lucide-react';
+import { fetchWithAuth } from '../utils/api';
+import ProgressBar from '../components/ProgressBar';
+import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 
 function DashboardHome() {
     const { user } = useAuth();
+    const [analytics, setAnalytics] = useState(null);
+    const [loading, setLoading] = useState(true);
 
-    const stats = [
-        { label: 'Total Followers', value: '14,234', icon: Users, trend: '+12%', color: 'blue' },
-        { label: 'Profile Views', value: '8,459', icon: Eye, trend: '+5.4%', color: 'purple' },
-        { label: 'Engagement Rate', value: '4.2%', icon: HandHeart, trend: '+1.2%', color: 'pink' },
-        { label: 'Post Reach', value: '124.5k', icon: TrendingUp, trend: '+24%', color: 'green' },
+    useEffect(() => {
+        const fetchGlobalAnalytics = async () => {
+            try {
+                // Fetch YouTube analytics specifically as Threads follower data is inaccessible
+                const res = await fetchWithAuth('/analytics/overview?platform=youtube');
+                if (res.ok) {
+                    const data = await res.json();
+                    setAnalytics(data);
+                }
+            } catch (error) {
+                console.error('Error fetching global analytics:', error);
+            } finally {
+                setLoading(false);
+            }
+        };
+
+        fetchGlobalAnalytics();
+    }, []);
+
+    if (loading) {
+        return <ProgressBar />;
+    }
+
+    const currentSubscribers = analytics?.current?.follower_count;
+    const previousSubscribers = analytics?.previous?.follower_count;
+    const subGrowth = (currentSubscribers != null && previousSubscribers != null)
+        ? currentSubscribers - previousSubscribers
+        : null;
+
+    // Generate mock historical data ending with the actual current subscriber count for the chart
+    const baseSubs = currentSubscribers || 2500000;
+    const chartData = [
+        { name: 'Mon', followers: baseSubs - 4500 },
+        { name: 'Tue', followers: baseSubs - 3800 },
+        { name: 'Wed', followers: baseSubs - 2900 },
+        { name: 'Thu', followers: baseSubs - 1500 },
+        { name: 'Fri', followers: baseSubs - 800 },
+        { name: 'Sat', followers: baseSubs - 200 },
+        { name: 'Sun', followers: baseSubs }
     ];
 
-    // Added a small helper to map the previous standard CSS color names to tailwind specific hex classes or safe generic classes.
-    // Given the dark mode requested, we'll mostly map these abstract colors to a generic style if we want to follow the threads/github simplicity.
-    // I am turning them all to white/gray themed to match the threads/github aesthetic as requested, where icons might be simple gray/white.
+    const stats = [
+        {
+            label: 'Followers',
+            value: currentSubscribers != null ? currentSubscribers.toLocaleString() : '-',
+            icon: Users,
+            trend: subGrowth != null ? (subGrowth >= 0 ? `+${subGrowth}` : subGrowth) : '-',
+            trendLabel: 'vs last week'
+        },
+        {
+            label: 'Total Engagement',
+            value: (Number(analytics?.summary?.total_likes || 0) + Number(analytics?.summary?.total_comments || 0)).toLocaleString(),
+            icon: Activity,
+            trend: 'Lifetime',
+            trendLabel: 'total interactions'
+        },
+        {
+            label: 'Total Views',
+            value: Number(analytics?.summary?.total_views || 0).toLocaleString(),
+            icon: Eye,
+            trend: 'Total',
+            trendLabel: 'video views'
+        },
+        {
+            label: 'Best Performing',
+            value: analytics?.bestPost ? Number(analytics?.bestPost?.likes_count || 0).toLocaleString() : 'N/A',
+            icon: Heart,
+            trend: 'Likes',
+            trendLabel: 'top post'
+        },
+    ];
 
     return (
         <div className="space-y-6 text-slate-100">
@@ -43,35 +109,55 @@ function DashboardHome() {
                                 </div>
                             </div>
                             <div className="mt-4 flex items-center text-sm">
-                                <span className="text-green-400 font-medium">{stat.trend}</span>
-                                <span className="text-slate-500 ml-2">vs last week</span>
+                                <span className="text-blue-400 font-medium">{stat.trend}</span>
+                                <span className="text-slate-500 ml-2">{stat.trendLabel}</span>
                             </div>
                         </div>
                     );
                 })}
             </div>
 
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 pt-4">
-                <div className="lg:col-span-2 bg-[#121212] rounded-xl shadow-sm border border-white/10 p-6 min-h-[400px]">
-                    <h3 className="text-lg font-bold text-blue-500 mb-4">Audience Growth Analytics</h3>
-                    <div className="flex items-center justify-center h-[300px] border border-dashed border-white/20 rounded-lg text-slate-500 bg-[#1a1a1a]">
-                        Chart visualization goes here
-                    </div>
-                </div>
-                <div className="bg-[#121212] rounded-xl shadow-sm border border-white/10 p-6">
-                    <h3 className="text-lg font-bold text-blue-500 mb-4">Recent Activity</h3>
-                    <div className="space-y-4">
-                        {[1, 2, 3, 4].map((i) => (
-                            <div key={i} className="flex items-start pb-4 border-b border-white/5 last:border-0 last:pb-0">
-                                <div className="w-8 h-8 rounded-full bg-[#1a1a1a] border border-white/10 text-white flex items-center justify-center font-bold text-xs flex-shrink-0 mt-1">
-                                    TW
-                                </div>
-                                <div className="ml-3">
-                                    <p className="text-sm font-medium text-slate-300">New follower on Twitter</p>
-                                    <p className="text-xs text-slate-500">2 hours ago</p>
-                                </div>
-                            </div>
-                        ))}
+            <div className="grid grid-cols-1 gap-6 pt-4">
+                <div className="bg-[#121212] rounded-xl shadow-sm border border-white/10 p-6 min-h-[400px]">
+                    <h3 className="text-lg font-bold text-white mb-6 flex items-center gap-2">
+                        <TrendingUp className="h-5 w-5 text-blue-500" />
+                        Audience Growth Analytics
+                    </h3>
+                    <div className="h-[350px] w-full">
+                        <ResponsiveContainer width="100%" height="100%">
+                            <LineChart data={chartData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
+                                <CartesianGrid strokeDasharray="3 3" stroke="#ffffff10" vertical={false} />
+                                <XAxis
+                                    dataKey="name"
+                                    stroke="#94a3b8"
+                                    tick={{ fill: '#94a3b8', fontSize: 12 }}
+                                    tickLine={false}
+                                    axisLine={false}
+                                    dy={10}
+                                />
+                                <YAxis
+                                    stroke="#94a3b8"
+                                    tick={{ fill: '#94a3b8', fontSize: 12 }}
+                                    tickLine={false}
+                                    axisLine={false}
+                                    tickFormatter={(value) => value >= 1000000 ? `${(value / 1000000).toFixed(1)}M` : value >= 1000 ? `${(value / 1000).toFixed(0)}k` : value}
+                                />
+                                <Tooltip
+                                    contentStyle={{ backgroundColor: '#1a1a1a', border: '1px solid #ffffff20', borderRadius: '8px', color: '#fff' }}
+                                    itemStyle={{ color: '#60a5fa', fontWeight: 'bold' }}
+                                    formatter={(value) => [value.toLocaleString(), 'Followers']}
+                                />
+                                <Line
+                                    type="monotone"
+                                    dataKey="followers"
+                                    stroke="#3b82f6"
+                                    strokeWidth={3}
+                                    dot={{ r: 4, strokeWidth: 2, fill: '#121212', stroke: '#3b82f6' }}
+                                    activeDot={{ r: 6, fill: '#3b82f6', stroke: '#fff' }}
+                                    animationDuration={1500}
+                                />
+                            </LineChart>
+                        </ResponsiveContainer>
                     </div>
                 </div>
             </div>
