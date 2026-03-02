@@ -76,11 +76,22 @@ const createTables = async () => {
     );
   `;
 
+  const trendCacheTable = `
+    CREATE TABLE IF NOT EXISTS trend_cache (
+      id SERIAL PRIMARY KEY,
+      topic VARCHAR(255) UNIQUE NOT NULL,
+      data JSONB NOT NULL,
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      expires_at TIMESTAMP NOT NULL
+    );
+  `;
+
   await db.query(usersTable);
   await db.query(connectedAccountsTable);
   await db.query(postsTable);
   await db.query(analyticsHistoryTable);
   await db.query(intelligenceResultsTable);
+  await db.query(trendCacheTable);
 
   // Migration for existing table
   try {
