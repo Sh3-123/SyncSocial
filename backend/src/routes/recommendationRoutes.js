@@ -7,5 +7,6 @@ router.use(verifyToken);
 
 router.post('/', recommendationController.generateRecommendation);
 router.post('/trend-content', recommendationController.generateTrendContent);
+router.post('/generate-script', recommendationController.generateHookScript);
 
 module.exports = router;
